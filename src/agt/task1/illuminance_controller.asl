@@ -19,7 +19,7 @@ requires_darkening
 /* Initial beliefs */
 
 // The agent believes that the target illuminance is 350 lux
-target_illuminance(300).
+target_illuminance(350).
 lights("off").
 blinds("lowered").
 weather("sunny").
