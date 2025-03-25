@@ -6,15 +6,15 @@
 requires_brightening
     :-  target_illuminance(Target) 
         & current_illuminance(Current)
-        & (Target - Current) >= 100
-.
+        & Target  > Current
+    .
 
 // Inference rule for inferring the belief requires_darkening if the target illuminance is lower than the current illuminance
 requires_darkening
     :-  target_illuminance(Target)  
         & current_illuminance(Current)
-        & (Current - Target) >= 100
-.
+        & Target < Current
+    .
 
 /* Initial beliefs */
 
@@ -24,7 +24,6 @@ lights("off").
 blinds("lowered").
 weather("sunny").
 current_illuminance(0).
-managing(false). // Added to manage overlapping actions
 
 /* Initial goals */
 
@@ -34,21 +33,24 @@ managing(false). // Added to manage overlapping actions
 /* 
  * Plan for reacting to the addition of the goal !start
  * Triggering event: addition of goal !start
- * Context: not already managing illuminance (to avoid overlapping)
- * Body: manages illuminance every 10 seconds to prevent blocking/freezing
+ * Context: true (the plan is always applicable)
+ * Body: every 4000ms, the agent strives to maintain the illuminance in the room at the target level 
 */
 @start_plan
 +!start
-    :   not managing(true)
+    :   true
     <-  .print("Continuously managing illuminance");
-        -+managing(true);
-        !manage_illuminance; 
-        .wait(10000); // Wait sufficient time to avoid artifact blocking issues
-        -+managing(false);
+        .wait(400);
+        !manage_illuminance; // creates the goal !manage_illuminance
         !start;
     .
 
-/* Plan for turning on lights only if blinds are raised or weather is cloudy (avoid conflict with raising blinds) */
+/* 
+ * Plan for reacting to the addition of the goal !manage_illuminance
+ * Triggering event: addition of goal !manage_illuminance
+ * Context: the agent believes that the lights are off and that the room requires brightening
+ * Body: the agent performs the action of turning on the lights
+*/
 @increase_illuminance_with_lights_plan
 +!manage_illuminance
     :   lights("off")
@@ -56,47 +58,53 @@ managing(false). // Added to manage overlapping actions
         & (blinds("raised") | weather("cloudy"))
     <-
         .print("Turning on the lights");
-        turnOnLights;
+        turnOnLights; // performs the action of turning on the lights
     .
 
-/* Plan for turning off lights if room requires darkening */
+/* 
+ * Plan for reacting to the addition of the goal !manage_illuminance
+ * Triggering event: addition of goal !manage_illuminance
+ * Context: the agent believes that the lights are on and that the room requires darkening
+ * Body: the agent performs the action of turning off the lights
+*/
 @decrease_illuminance_with_lights_plan
 +!manage_illuminance
     :   lights("on")
         & requires_darkening
     <-
         .print("Turning off the lights");
-        turnOffLights;
+        turnOffLights; // performs the action of turning off the lights
     .
 
-/* Plan for raising blinds only during sunny weather to increase illuminance */
+/* 
+ * Plan for reacting to the addition of the goal !manage_illuminance
+ * Triggering event: addition of goal !manage_illuminance
+ * Context: the agent believes that the blinds are lowered and that the room requires brightening
+ * Body: the agent performs the action of raising the blinds
+*/
 @increase_illuminance_with_blinds_plan
 +!manage_illuminance
     :   blinds("lowered")
-        & requires_brightening
+        &  requires_brightening
         & weather("sunny")
     <-
-        .print("Raising the blinds (sunny weather)");
-        raiseBlinds;
+        .print("Raising the blinds");
+        raiseBlinds; // performs the action of raising the blinds
     .
 
-/* Plan for lowering blinds when room requires darkening */
+/* 
+ * Plan for reacting to the addition of the goal !manage_illuminance
+ * Triggering event: addition of goal !manage_illuminance
+ * Context: the agent believes that the blinds are raised and that the room requires darkening
+ * Body: the agent performs the action of lowering the blinds
+*/
 @decrease_illuminance_with_blinds_plan
 +!manage_illuminance
     :   blinds("raised")
         & requires_darkening
     <-
         .print("Lowering the blinds");
-        lowerBlinds;
-    .
-
-/* Plan when the current illuminance equals target illuminance */
-@target_reached_plan
-+!manage_illuminance
-    :   current_illuminance(Current)
-        & target_illuminance(Current)
-    <-
-        .print("Design objective achieved: current illuminance equals target.");
+        lowerBlinds; // performs the action of lowering the blinds
     .
 
 /* Plan reacting to weather becoming cloudy: lower blinds if raised */
@@ -108,15 +116,25 @@ managing(false). // Added to manage overlapping actions
         lowerBlinds;
     .
 
-/* Plan for reacting to the addition of current illuminance */
+/* 
+ * Plan for reacting to the addition of the belief current_illuminance(Current)
+ * Triggering event: addition of belief current_illuminance(Current)
+ * Context: true (the plan is always applicable)
+ * Body: prints the current illuminance conditions in the room
+*/
 @current_illuminance_plan
 +current_illuminance(Current)
     :   true
     <-
-        .print("Current illuminance level: ", Current);
+        .print("Current illuminance level: ", Current)
     .
 
-/* Plan for reacting to the addition of weather condition */
+/* 
+ * Plan for reacting to the addition of the belief weather(State)
+ * Triggering event: addition of belief weather(State)
+ * Context: true (the plan is always applicable)
+ * Body: prints the weather conditions
+*/
 @weather_plan
 +weather(State)
     :   true
@@ -124,18 +142,28 @@ managing(false). // Added to manage overlapping actions
         .print("The weather is ", State);
     .
 
-/* Plan for reacting to the addition of blinds state */
+/* 
+ * Plan for reacting to the addition of the belief blinds(State)
+ * Triggering event: addition of belief blinds(State)
+ * Context: true (the plan is always applicable)
+ * Body: prints the state of the blinds
+*/
 @blinds_plan
 +blinds(State)
-    :   true
+    : true
     <-
         .print("The blinds are ", State);
     .
 
-/* Plan for reacting to the addition of lights state */
+/* 
+ * Plan for reacting to the addition of the belief lights(State)
+ * Triggering event: addition of belief lights(State)
+ * Context: true (the plan is always applicable)
+ * Body: prints the state of the lights
+*/
 @lights_plan
 +lights(State)
-    :   true
+    : true
     <- 
         .print("The lights are ", State);
     .
